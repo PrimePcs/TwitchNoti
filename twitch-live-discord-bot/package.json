@@ -1,0 +1,14 @@
+{
+  "name": "twitch-live-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Posts a Discord alert when configured Twitch channels go live.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}
