@@ -151,19 +151,6 @@ export async function startCommunityBot(config, stateFile, log = console.log) {
     }
   };
 
-  client.once(Events.ClientReady, async () => {
-    try {
-      const guild = await client.guilds.fetch(config.discordGuildId);
-      await guild.commands.set(commands);
-      for (const [messageId, giveaway] of Object.entries(store.data.giveaways)) {
-        if (giveaway.status === "active") void finishGiveaway(messageId);
-      }
-      log(`Community bot online as ${client.user.tag}; slash commands registered in ${guild.name}.`);
-    } catch (error) {
-      console.error("Could not register community slash commands:", error);
-    }
-  });
-
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (interaction.isChatInputCommand() && interaction.commandName === "middleman") {
@@ -304,6 +291,16 @@ export async function startCommunityBot(config, stateFile, log = console.log) {
   });
 
   await client.login(config.discordBotToken);
+  try {
+    const guild = await client.guilds.fetch(config.discordGuildId);
+    await guild.commands.set(commands);
+    for (const [messageId, giveaway] of Object.entries(store.data.giveaways)) {
+      if (giveaway.status === "active") void finishGiveaway(messageId);
+    }
+    log(`Community bot online as ${client.user.tag}; slash commands registered in ${guild.name}.`);
+  } catch (error) {
+    console.error("Could not register community slash commands:", error);
+  }
   return client;
 }
 
