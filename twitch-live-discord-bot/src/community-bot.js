@@ -5,6 +5,7 @@ import {
   ChannelType,
   Client,
   EmbedBuilder,
+  Events,
   GatewayIntentBits,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -150,16 +151,20 @@ export async function startCommunityBot(config, stateFile, log = console.log) {
     }
   };
 
-  client.once("ready", async () => {
-    const guild = await client.guilds.fetch(config.discordGuildId);
-    await guild.commands.set(commands);
-    for (const [messageId, giveaway] of Object.entries(store.data.giveaways)) {
-      if (giveaway.status === "active") void finishGiveaway(messageId);
+  client.once(Events.ClientReady, async () => {
+    try {
+      const guild = await client.guilds.fetch(config.discordGuildId);
+      await guild.commands.set(commands);
+      for (const [messageId, giveaway] of Object.entries(store.data.giveaways)) {
+        if (giveaway.status === "active") void finishGiveaway(messageId);
+      }
+      log(`Community bot online as ${client.user.tag}; slash commands registered in ${guild.name}.`);
+    } catch (error) {
+      console.error("Could not register community slash commands:", error);
     }
-    log(`Community bot online as ${client.user.tag}; slash commands registered in ${guild.name}.`);
   });
 
-  client.on("interactionCreate", async (interaction) => {
+  client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (interaction.isChatInputCommand() && interaction.commandName === "middleman") {
         if (!config.middlemanRoleId) return interaction.reply({ content: "Middleman tickets are not configured yet.", ephemeral: true });
