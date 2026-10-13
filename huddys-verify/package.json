@@ -1,0 +1,10 @@
+{
+  "name": "huddys-verify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A button-based Discord verification bot.",
+  "type": "module",
+  "scripts": { "start": "node src/index.js", "test": "node --test" },
+  "dependencies": { "discord.js": "^14.27.0" },
+  "engines": { "node": ">=20.6" }
+}
