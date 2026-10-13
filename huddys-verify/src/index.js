@@ -1,6 +1,6 @@
 import { Client, Events, GatewayIntentBits, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { loadConfig } from "./config.js";
-import { buildVerifyPanel, canManageRole, resolveVerifiedRole, VERIFY_BUTTON_ID } from "./verify.js";
+import { buildVerifyPanel, canonicalName, canManageRole, resolveVerifiedRole, VERIFY_BUTTON_ID } from "./verify.js";
 
 const config = loadConfig();
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -15,13 +15,14 @@ client.once(Events.ClientReady, async (readyClient) => {
   const guild = await readyClient.guilds.fetch(config.guildId);
   await guild.commands.set([setupCommand]);
   console.log(`Huddy's Verify online as ${readyClient.user.tag} in ${guild.name}.`);
-  if (config.channelId) {
-    const channel = await guild.channels.fetch(config.channelId).catch(() => null);
-    if (channel?.isTextBased()) {
-      const recent = await channel.messages.fetch({ limit: 25 }).catch(() => null);
-      const alreadyPosted = recent?.some((message) => message.author.id === readyClient.user.id && message.components.some((row) => row.components.some((button) => button.customId === VERIFY_BUTTON_ID)));
-      if (!alreadyPosted) await channel.send(buildVerifyPanel());
-    }
+  await guild.channels.fetch();
+  const channel = config.channelId
+    ? await guild.channels.fetch(config.channelId).catch(() => null)
+    : guild.channels.cache.find((item) => item.isTextBased() && canonicalName(item.name) === "verify");
+  if (channel?.isTextBased()) {
+    const recent = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+    const alreadyPosted = recent?.some((message) => message.author.id === readyClient.user.id && message.components.some((row) => row.components.some((button) => button.customId === VERIFY_BUTTON_ID)));
+    if (!alreadyPosted) await channel.send(buildVerifyPanel());
   }
 });
 

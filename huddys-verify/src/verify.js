@@ -2,6 +2,10 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionF
 
 export const VERIFY_BUTTON_ID = "huddys_verify";
 
+export function canonicalName(value) {
+  return value.normalize("NFKC").replace(/[^a-z]/gi, "").toLowerCase();
+}
+
 export function buildVerifyPanel() {
   const embed = new EmbedBuilder()
     .setColor(0x57f287)
@@ -17,7 +21,7 @@ export function buildVerifyPanel() {
 export async function resolveVerifiedRole(guild, configuredRoleId) {
   if (configuredRoleId) return guild.roles.fetch(configuredRoleId).catch(() => null);
   await guild.roles.fetch();
-  return guild.roles.cache.find((role) => /^✅?\s*verified$/i.test(role.name.trim())) || null;
+  return guild.roles.cache.find((role) => canonicalName(role.name) === "verified") || null;
 }
 
 export function canManageRole(guild, role) {
