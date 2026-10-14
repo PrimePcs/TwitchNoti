@@ -20,6 +20,7 @@ async function main() {
   const discord = new DiscordClient({
     botToken: config.discordBotToken,
     channelId: config.discordChannelId,
+    guildId: config.discordGuildId,
     roleId: config.discordRoleId,
     alertMessage: config.alertMessage,
   });

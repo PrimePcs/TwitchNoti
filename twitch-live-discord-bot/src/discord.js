@@ -50,12 +50,42 @@ async function errorFromResponse(response) {
 }
 
 export class DiscordClient {
-  constructor({ botToken, channelId, roleId, alertMessage, fetchImpl = fetch }) {
+  constructor({ botToken, channelId, guildId, roleId, alertMessage, fetchImpl = fetch }) {
     this.botToken = botToken;
     this.channelId = channelId;
+    this.guildId = guildId;
     this.roleId = roleId;
     this.alertMessage = alertMessage;
     this.fetch = fetchImpl;
+  }
+
+  async findFallbackChannel() {
+    if (!this.guildId) return null;
+
+    const response = await this.fetch(`${API_BASE}/guilds/${this.guildId}/channels`, {
+      headers: {
+        Authorization: `Bot ${this.botToken}`,
+        "User-Agent": "TwitchLiveDiscordBot/1.0",
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+
+    if (!response.ok) return null;
+
+    const channels = await response.json();
+    const preferredNames = [
+      "stream-notify",
+      "twitch-alerts",
+      "twitch-alert",
+      "live-alerts",
+      "stream-alerts",
+    ];
+
+    return (
+      channels.find((channel) =>
+        preferredNames.includes(String(channel.name).toLowerCase()),
+      )?.id || null
+    );
   }
 
   async sendLiveAlert(stream, retryCount = 0) {
@@ -84,6 +114,12 @@ export class DiscordClient {
 
     if (!response.ok) {
       if (response.status === 403) {
+          const fallbackChannelId = await this.findFallbackChannel();
+          if (fallbackChannelId && fallbackChannelId !== this.channelId) {
+            this.channelId = fallbackChannelId;
+            return this.sendLiveAlert(stream, retryCount);
+          }
+
         throw new Error(
           `Discord rejected the alert channel (${this.channelId}). ` +
           "Make sure this bot is in the server and has View Channel, Send Messages, and Embed Links in that channel.",
