@@ -82,7 +82,15 @@ export class DiscordClient {
       return this.sendLiveAlert(stream, retryCount + 1);
     }
 
-    if (!response.ok) throw await errorFromResponse(response);
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error(
+          `Discord rejected the alert channel (${this.channelId}). ` +
+          "Make sure this bot is in the server and has View Channel, Send Messages, and Embed Links in that channel.",
+        );
+      }
+      throw await errorFromResponse(response);
+    }
     return response.json();
   }
 }

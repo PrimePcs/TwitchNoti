@@ -127,6 +127,12 @@ export async function startCommunityBot(config, stateFile, log = console.log) {
   }
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  // Discord can emit an `error` event when the configured guild is unavailable
+  // (for example, after the bot is removed). Keep the Twitch alert loop alive;
+  // community slash commands are optional and should not crash the service.
+  client.on(Events.Error, (error) => {
+    console.error("Discord community client error:", error);
+  });
   const store = new CommunityStateStore(stateFile);
   await store.load();
   const timers = new Map();

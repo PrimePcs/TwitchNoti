@@ -51,3 +51,8 @@ test("Discord payload limits mentions to the configured role", () => {
   assert.equal(payload.embeds[0].url, "https://twitch.tv/some_streamer");
   assert.match(payload.embeds[0].image.url, /1280x720\.jpg\?t=\d+$/);
 });
+
+test("alert payload does not parse mentions outside the configured role", () => {
+  const payload = buildMessage(stream, { roleId: null, alertMessage: "{name} is live!" });
+  assert.deepEqual(payload.allowed_mentions, { parse: [] });
+});
