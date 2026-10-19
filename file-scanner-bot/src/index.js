@@ -1,4 +1,5 @@
-import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
+import { Client, EmbedBuilder, GatewayIntentBits, escapeMarkdown } from "discord.js";
+import { pendingText, verdict } from "./verdict.js";
 
 const required = [
   "DISCORD_BOT_TOKEN",
@@ -63,15 +64,15 @@ async function waitForAnalysis(id) {
   throw new Error("VirusTotal scan timed out");
 }
 
-function resultText(stats) {
-  const malicious = Number(stats.malicious || 0) + Number(stats.suspicious || 0);
-  if (malicious > 0) return `⚠️ **Detection: ${malicious} engine(s) flagged this file.**`;
-  return "✅ **No detections were reported by the scan.**";
+async function updateStatus(message, status, payload) {
+  const safePayload = { ...payload, allowedMentions: { parse: [], repliedUser: false } };
+  if (status) return status.edit(safePayload);
+  return message.reply(safePayload);
 }
 
-async function scanAttachment(message, attachment) {
+async function scanAttachment(message, attachment, status) {
   if (attachment.size > maxBytes) {
-    await message.reply(`❌ \`${attachment.name}\` is larger than the ${Math.round(maxBytes / 1024 / 1024)} MB limit.`);
+    await updateStatus(message, status, { content: `⚠️ **NOT SCANNED — staff review needed.** File exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit. Do not download or open it until reviewed.` });
     return;
   }
   const response = await fetch(attachment.url, { signal: AbortSignal.timeout(60000) });
@@ -80,18 +81,22 @@ async function scanAttachment(message, attachment) {
   if (bytes.byteLength > maxBytes) throw new Error("File exceeds scan size limit");
   const analysisId = await uploadToVirusTotal(attachment.name, bytes);
   const stats = await waitForAnalysis(analysisId);
+  const result = verdict(stats);
   const output = new EmbedBuilder()
-    .setTitle("VirusTotal file scan")
-    .setDescription(`${resultText(stats)}\nFile: **${attachment.name}**\nUploaded by: <@${message.author.id}>`)
+    .setTitle(result.title)
+    .setDescription(`${result.text}\n\nFile: **${escapeMarkdown(attachment.name).slice(0, 300)}**\nUploaded by: <@${message.author.id}>`)
     .addFields(
       { name: "Malicious", value: String(stats.malicious || 0), inline: true },
       { name: "Suspicious", value: String(stats.suspicious || 0), inline: true },
       { name: "Undetected", value: String(stats.undetected || 0), inline: true },
     )
-    .setColor((stats.malicious || stats.suspicious) ? 0xed4245 : 0x57f287)
+    .setColor(result.color)
     .setFooter({ text: "No detections does not guarantee safety. Public VirusTotal submissions are shared." });
-  const destination = resultChannelId ? await client.channels.fetch(resultChannelId) : message.channel;
-  await destination.send({ embeds: [output], allowedMentions: { parse: [] } });
+  await updateStatus(message, status, { content: "", embeds: [output] });
+  if (resultChannelId && resultChannelId !== message.channelId) {
+    const destination = await client.channels.fetch(resultChannelId);
+    await destination.send({ content: `Source: ${message.url}`, embeds: [output], allowedMentions: { parse: [] } });
+  }
 }
 
 let scanQueue = Promise.resolve();
@@ -101,13 +106,22 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot || message.guildId !== guildId || message.channel.parentId !== categoryId || !message.attachments.size) return;
   for (const attachment of message.attachments.values()) {
     if (queued >= 20) {
-      await message.reply({ content: "⚠️ Scanner queue is full. Please try again later.", allowedMentions: { parse: [], repliedUser: false } }).catch(() => {});
+      await message.reply({ content: "⚠️ **NOT SCANNED — THIS FILE MAY BE UNSAFE.** Scanner queue is full. Do not download until scanned or reviewed by staff.", allowedMentions: { parse: [], repliedUser: false } }).catch(() => {});
       break;
     }
     queued += 1;
+    const statusPromise = message.reply({ content: `${pendingText}\nFile: **${escapeMarkdown(attachment.name).slice(0, 300)}**`, allowedMentions: { parse: [], repliedUser: false } }).catch(error => {
+      console.error("Could not post scan status:", error.message);
+      return null;
+    });
+    console.log(`Queued attachment ${attachment.id} in channel ${message.channelId}`);
     scanQueue = scanQueue.then(async () => {
-      try { await scanAttachment(message, attachment); }
-      catch (error) { console.error("Scan failed:", error.message); await message.reply({ content: "⚠️ I could not finish scanning an attachment. Treat it as unscanned.", allowedMentions: { parse: [], repliedUser: false } }).catch(() => {}); }
+      const status = await statusPromise;
+      try { await scanAttachment(message, attachment, status); }
+      catch (error) {
+        console.error("Scan failed:", error.message);
+        await updateStatus(message, status, { content: "⚠️ **SCAN INCOMPLETE — THIS FILE MAY BE UNSAFE.**\nStaff review is needed. Do not download or open it until reviewed.", embeds: [] }).catch(() => {});
+      }
       finally { queued -= 1; }
     });
   }
