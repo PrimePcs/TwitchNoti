@@ -101,8 +101,25 @@ async function scanAttachment(message, attachment, status) {
 
 let scanQueue = Promise.resolve();
 let queued = 0;
-client.once("clientReady", () => console.log(`File scanner online as ${client.user.tag}; watching category ${categoryId}`));
+client.once("clientReady", async () => {
+  console.log(`File scanner online as ${client.user.tag}; watching category ${categoryId}; configured guild ${guildId}`);
+  try {
+    const category = await client.channels.fetch(categoryId);
+    if (!category) throw new Error("Watched category is not accessible to the bot");
+    console.log(`Watched category resolved: type=${category.type}, guild=${category.guildId}`);
+    if (category.guildId !== guildId) console.error(`CONFIGURATION MISMATCH: watched category belongs to guild ${category.guildId}, but DISCORD_GUILD_ID is ${guildId}`);
+    const channels = await category.guild.channels.fetch();
+    for (const channel of channels.values()) {
+      if (channel?.parentId !== categoryId) continue;
+      const perms = channel.permissionsFor(client.user);
+      console.log(`Watched channel ${channel.id}: view=${perms?.has('ViewChannel')} send=${perms?.has('SendMessages')} embeds=${perms?.has('EmbedLinks')}`);
+    }
+  } catch (error) { console.error("Scanner configuration check failed:", error.message); }
+});
 client.on("messageCreate", async (message) => {
+  if (!message.author.bot && message.attachments.size) {
+    console.log(`Attachment received: guild=${message.guildId} channel=${message.channelId} parent=${message.channel.parentId} files=${message.attachments.size}`);
+  }
   if (message.author.bot || message.guildId !== guildId || message.channel.parentId !== categoryId || !message.attachments.size) return;
   for (const attachment of message.attachments.values()) {
     if (queued >= 20) {
